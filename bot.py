@@ -9,6 +9,8 @@ import telebot  # Тг бот
 from telebot import types  # Для клавиатуры в тг
 
 import websource
+
+
 import posrednik
 from model import get_round_num, get_lot_info
 from visual import getplot_image
@@ -16,6 +18,13 @@ from config import ticker_list
 
 bot = telebot.TeleBot(TOKEN)  # создание бота
 helper = posrednik.Posrednik()
+localhost = True
+
+if localhost:
+    import hosting
+    from pyngrok import ngrok
+    hosting.start()
+
 
 '''
 У нас есть код на Python-e который состоит из нескольких частей:
@@ -67,8 +76,12 @@ def inline_answer(call):
     murkup_MQ = ''
 
     if call.data in ticker_list:
-        stock_predict = helper.predicted[call.data]         
-        murkup_MQ = types.InlineKeyboardMarkup(row_width=1).add(types.InlineKeyboardButton(text=f"Открыть динамический график", url=f'http://127.0.0.1:8080/plots/{call.data}'),
+        stock_predict = helper.predicted[call.data]
+        if localhost:
+            link = str(ngrok.get_tunnels()).split('"')[1][6:]
+        else:
+            link = '127.0.0.1'
+        murkup_MQ = types.InlineKeyboardMarkup(row_width=1).add(types.InlineKeyboardButton(text=f"Открыть динамический график", url=f'{link}/plots/{call.data}'),
                                                     types.InlineKeyboardButton(text=f"Получить график в высоком разрешении", callback_data=f"get_MQ_{call.data}"))
 
     if "get_MQ_" in call.data:

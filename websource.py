@@ -30,8 +30,7 @@ def run():
     app.run(host="127.0.0.1", port=8080)
 
 def start():
-    server = Thread(target=run)
-    server.start()
+    Thread(target=run).start()
 
 if __name__ == "__main__":
     run()
