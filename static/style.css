@@ -1,0 +1,21 @@
+main p:nth-child(1) {
+    margin-top: 56px;
+}
+
+main p {
+    padding: 10px;
+    text-align: justify;
+}
+
+.container {
+    max-width: 1000px;    
+}
+
+.navbar {
+    background-color: white;
+    border-bottom: 1px solid gray;
+}
+
+.noafter::after {
+    content: none;
+}
