@@ -1,6 +1,6 @@
-BOT_token = '' # Вставьте свой токен телеграмм бота
-NGROK_token = '' # Вставьте свой токен приложения ngrok, если нужно
-localhost = False # Если вы планируете использовать ngrok, установите True
+BOT_token = '5988974979:AAEJWIb4WqFhFoBPvwVS-MfsrlAm4HI_QNQ' # Вставьте свой токен телеграмм бота
+NGROK_token = '1l2wTI09vPeiDfqlVkAS2sMvA2k_ytJMS938fZ9DnPtdvdR5' # Вставьте свой токен приложения ngrok, если нужно
+localhost = True # Если вы планируете использовать ngrok, установите True
 
 data_path = lambda ticker: rf'./data/{ticker}_data.csv'
 predict_data_path = lambda ticker: rf'./predict_data/{ticker}_predict_data.csv'
