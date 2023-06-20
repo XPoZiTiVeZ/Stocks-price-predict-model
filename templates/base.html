@@ -21,7 +21,7 @@
                             <a class="nav-link active" aria-current="page" href="/">Главная</a>
                         </li>
                     </ul>
-                        <a class="navbar-brand ml-5" href="https://t.me/my_testing_super_bot"><b>MADI</b></a>
+                        <a class="navbar-brand ml-5" href="https://t.me/madi_ai_bot"><b>MADI</b></a>
                     <ul class="navbar-nav">
                         <li class="nav-item dropdown">
                             <a class="nav-link dropdown-toggle noafter" role="button" data-bs-toggle="dropdown" aria-expanded="false">
@@ -40,6 +40,8 @@
         </header>
         <main>
             <div class="container">
+                {% block error %}
+                {% endblock %}
                 {% block content %}
                 {% endblock %}
             </div>

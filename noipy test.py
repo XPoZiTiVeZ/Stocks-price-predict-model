@@ -1,1 +1,0 @@
-noipy test.py

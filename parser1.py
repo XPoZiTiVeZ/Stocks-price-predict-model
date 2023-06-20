@@ -6,21 +6,19 @@ import datetime
 import pandas as pd
 import math
 import os
-from config import ticker_list
+from config import ticker_info, data_path, predict_data_path, plots_path, mq_plots_path
 # Импорт всех необходимых библиотек. Apimoex - api МосБиржи
 
 
 def clean_old_file():
-    for ticker in ticker_list:
-        data_path = rf'./data/{ticker}_data.csv'
-        photo_path = rf'./plots/{ticker}_plot.png'
-        MQ_photo_path = rf'./mq_plots/MQ_{ticker}_plot.png'
+    for ticker in ticker_info.keys():
         try:
-            os.remove(data_path)
-            os.remove(photo_path)
-            os.remove(MQ_photo_path)
-        except:
-            pass
+            os.remove(data_path(ticker))
+            os.remove(plots_path(ticker))
+            os.remove(mq_plots_path(ticker))
+        except Exception as e:
+            print(e)
+
 
 def parse():
     clean_old_file()
@@ -29,7 +27,7 @@ def parse():
         Объявление сеанса requests в качестве контекстного менеджера.
         Это гарантирует, что сеанс будет закрыт сразу же после выхода из блока with, даже если произошли необработанные исключения.
         '''
-        for ticker in ticker_list:
+        for ticker in ticker_info.keys():
             # Итерация списка тикеров
             data = pd.DataFrame(apimoex.get_board_history(session,
                                                         ticker, start='2013-01-01', end=str(datetime.date.today()),
@@ -42,7 +40,6 @@ def parse():
             end - Дата конца записи
             board - Режим торгов 
             '''
-            file_name = ticker + '_data.csv'
             # Создание названия будущего файла
             for index, element in enumerate(data['CLOSE']):
                 # Проверка на пропуски в строках данных путем итерации столбца Dataframe
@@ -51,7 +48,7 @@ def parse():
                     data = data.drop(labels=[index])
                     # Удаление строки с пропуском
 
-            data.to_csv(os.path.join(r'./data/', file_name), index=False)
+            data.to_csv(os.path.join(data_path(ticker)), index=False)
             # Сохранение файла в .csv формат
 
 

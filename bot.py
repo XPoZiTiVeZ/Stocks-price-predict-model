@@ -1,39 +1,26 @@
 # bot by @igorar666 and @MSigutin
-
-TOKEN = "5910726765:AAH0jbV9TlhctKHMoNBIfxj_5ie0OopZtXw"
-
-import os.path as pth
-from datetime import datetime
-
 import telebot  # Тг бот
 from telebot import types  # Для клавиатуры в тг
-
-import websource
-
-
 import posrednik
-from model import get_round_num, get_lot_info
+import websource
+from model import get_round_num
 from visual import getplot_image
-from config import ticker_list
+from datetime import datetime
+from config import BOT_token, ticker_info, data_path, predict_data_path, plots_path, mq_plots_path, localhost
 
-bot = telebot.TeleBot(TOKEN)  # создание бота
+
+bot = telebot.TeleBot(BOT_token)  # создание бота
 helper = posrednik.Posrednik()
-localhost = True
+murkup_MQ = ''
+    
 
-if localhost:
-    import hosting
-    from pyngrok import ngrok
-    hosting.start()
-
-
-'''
-У нас есть код на Python-e который состоит из нескольких частей:
+'''У нас есть код на Python-e который состоит из нескольких частей:
 1. Парсер. Он получает новейшие данные об акциях
 2. Нейросеть. Каждый раз она переобучается на данных и делает прогноз на завтра
 3. Визуализатор. Делает график из последних данных в таблице и прогноза
 4. Бот. С ним вы общаетесь в Телеграме
-5. Посредник. Связующее звену между всем вышестоящим
-'''
+5. Посредник. Связующее звену между все вышестоящим'''
+
 
 @bot.message_handler(commands=["start"])
 def start(message):  # ответ на команду start
@@ -57,62 +44,88 @@ def reload(message):
     date_now = f'{now.day}.{now.month}.{now.year}'
     time_now = f'{now.hour}:{now.minute}:{now.second}'
     bot.send_message(text=f"Данные обновлены {date_now} в {time_now} по МСК", chat_id=message.chat.id)
-    bot.delete_message(message.chat.id, message.id - 2)
 
 
 @bot.message_handler(commands=["predicts"])
 def get_predicts(message):
     markup_inline = types.InlineKeyboardMarkup(row_width=2)
-    buttons = [types.InlineKeyboardButton(text=f"Сбербанк ({ticker})", callback_data=f"{ticker}") for ticker in ticker_list]
+    
+    buttons = [types.InlineKeyboardButton(text=f"{ticker_info.get(ticker)[1]} ({ticker})", callback_data=f"{ticker}") for ticker in ticker_info.keys()]
     markup_inline.add(*buttons)
-
+    markup_inline.add(types.InlineKeyboardButton(text=f"Выбрать все акции", callback_data=f"all"))
+    
     bot.send_photo(message.chat.id, open("photo.png", 'rb'), f"Выбери акцию, для которой хочешь получить прогноз",
                    reply_markup=markup_inline)
 
+
+def send_predict(message, stock: str, stock_predict: float, link, series=False):
+    murkup_MQ = types.InlineKeyboardMarkup()
+    murkup_MQ.add(types.InlineKeyboardButton(text=f"Открыть динамический график", url=f'{link}/plots/{stock}'))
+    murkup_MQ.add(types.InlineKeyboardButton(text=f"Скачать график в высоком разрешении", callback_data=f"get_MQ_{stock}"))
+    murkup_MQ.add(types.InlineKeyboardButton(text=f"На главную", callback_data=f"on_main"))
+    
+    open_file = open(data_path(stock), 'rb')
+    last_date = '.'.join((str(open_file.readlines()[-1]).split(',')[1]).split('-')[::-1])
+    open_file.close()
+
+    open_file = open(data_path(stock), 'rb')
+    last_price = float(str(open_file.readlines()[-1]).split(',')[2])
+    open_file.close()
+
+    delta_price = round(abs(stock_predict - last_price), get_round_num(stock))
+    profit = round(delta_price * ticker_info.get(stock)[0], get_round_num(stock) + len(str(ticker_info.get(stock)[0])) - 1)
+    
+    photo = open(plots_path(stock), "rb")
+    caption_predict_up = f"Прогноз от _{last_date}_:\n\nАкции *{stock}* вырастут до *{stock_predict}* ₽▲\n\nПотенциальная прибыль от _ПОКУПКИ_ или _УДЕРЖАНИЯ_ одной акции составит *{profit}* ₽"
+    caption_predict_down = f"Прогноз от _{last_date}_:\n\nАкции *{stock}* упадут до *{stock_predict}* ₽▼\n\nПотенциальная прибыль от _ПРОДАЖИ_ одной акции с её выкупом в дальнейшем составит *{profit}* ₽"
+    
+    if series:
+        if last_price < stock_predict:
+            bot.send_photo(photo=photo, caption=caption_predict_up, parse_mode='Markdown', chat_id=message.chat.id, reply_markup=murkup_MQ)
+        else:
+            bot.send_photo(photo=photo, caption=caption_predict_down, parse_mode='Markdown', chat_id=message.chat.id, reply_markup=murkup_MQ)
+    else:
+        if last_price < stock_predict:
+            bot.edit_message_media(media=types.InputMediaPhoto(photo, caption=caption_predict_up, parse_mode='Markdown'),
+                                   chat_id=message.chat.id, message_id=message.id, reply_markup=murkup_MQ)
+        else:
+            bot.edit_message_media(media=types.InputMediaPhoto(photo, caption=caption_predict_down, parse_mode='Markdown'),
+                                   chat_id=message.chat.id, message_id=message.id, reply_markup=murkup_MQ)
+
+
 @bot.callback_query_handler(func=lambda call: True)
 def inline_answer(call):
-    stock = call.data
-    stock_predict = 0
-    murkup_MQ = ''
+    try:
+        link = str(ngrok.get_tunnels()).split('"')[1][6:] if localhost else '127.0.0.1'
+    except:
+        link = '127.0.0.1'
 
-    if call.data in ticker_list:
-        stock_predict = helper.predicted[call.data]
-        if localhost:
-            link = str(ngrok.get_tunnels()).split('"')[1][6:]
-        else:
-            link = '127.0.0.1'
-        murkup_MQ = types.InlineKeyboardMarkup(row_width=1).add(types.InlineKeyboardButton(text=f"Открыть динамический график", url=f'{link}/plots/{call.data}'),
-                                                    types.InlineKeyboardButton(text=f"Получить график в высоком разрешении", callback_data=f"get_MQ_{call.data}"))
-
-    if "get_MQ_" in call.data:
+    if call.data in ticker_info.keys():
+        stock_predict = float((str(open(predict_data_path(call.data), 'rb').readlines()[-1]).split(',')[2])[:-6])
         try:
-            bot.send_document(call.message.chat.id, open(rf'./mq_plots/MQ_{call.data[-4:]}_plot.png', 'rb'),
-                            caption=f'{call.data[-4:]} stock price')
+            send_predict(call.message, call.data, stock_predict, link)
         except:
-            getplot_image(stock, rf'./data/{call.data}_data.csv', rf'./predata/{call.data}_predata.csv', max_quality=True)
-            bot.send_document(call.message.chat.id, open(rf'./mq_plots/MQ_{call.data[-4:]}_plot.png', 'rb'), caption=f'{call.data[-4:]} stock price')
+            getplot_image(call.data, data_path(call.data), predict_data_path(call.data), max_quality=True)
+            send_predict(call.message, call.data, stock_predict, link)
 
-    if "get_MQ_" not in call.data:
-        open_file = open(f'./data/{call.data}_data.csv', 'rb')
-        last_date = '.'.join((str(open_file.readlines()[-1]).split(',')[1]).split('-')[::-1])
-        open_file.close()
+    elif "get_MQ_" in call.data:
+        try:
+            bot.send_document(call.message.chat.id, open(mq_plots_path(call.data[-4:]), 'rb'), caption=f'{call.data[-4:]} stock price')
+        except:
+            getplot_image(call.data[-4:], data_path(call.data[-4:]), predict_data_path(call.data[-4:]), max_quality=True)
+            bot.send_document(call.message.chat.id, open(mq_plots_path(call.data[-4:]), 'rb'), caption=f'{call.data[-4:]} stock price')
 
-        open_file = open(f'./data/{call.data}_data.csv', 'rb')
-        last_price = float(str(open_file.readlines()[-1]).split(',')[2])
-        open_file.close()
+    elif call.data == 'all':
+        for ticker in ticker_info.keys():
+            stock_predict = float((str(open(predict_data_path(ticker), 'rb').readlines()[-1]).split(',')[2])[:-6])
+            send_predict(call.message, ticker, stock_predict, link, series=True)
 
-        delta_price = round(abs(stock_predict - last_price), get_round_num(stock))
-        profit = round(delta_price * get_lot_info(stock), get_round_num(stock) + len(str(get_lot_info(stock))) - 1)
-        if last_price < stock_predict:
-            bot.edit_message_media(media=types.InputMediaPhoto(open(f"./plots/{stock}_plot.png", "rb"),
-                                                               caption=f"Прогноз от _{last_date}_:\n\nАкции *{stock}* вырастут на {delta_price} до *{stock_predict}* ₽▲\n\nПотенциальная прибыль от _ПОКУПКИ_ одной акции составит *{profit}* ₽",
-                                                               parse_mode='Markdown'),
-                                   chat_id=call.message.chat.id, message_id=call.message.id, reply_markup=murkup_MQ)
-        else:
-            bot.edit_message_media(media=types.InputMediaPhoto(open(f"./plots/{stock}_plot.png", "rb"),
-                                                               caption=f"Прогноз от _{last_date}_:\n\nАкции *{stock}* упадут на {delta_price} до *{stock_predict}* ₽▼\n\nПотенциальная прибыль от _ПРОДАЖИ_ одной акции с её выкупом в дальнейшем составит *{profit}* ₽",
-                                                               parse_mode='Markdown'),
-                                   chat_id=call.message.chat.id, message_id=call.message.id, reply_markup=murkup_MQ)
+    elif call.data == 'on_main':
+        bot.delete_message(call.message.chat.id, call.message.id)
+        get_predicts(call.message)
+    
+    else:
+        pass
 
 
 @bot.message_handler(content_types=['text'])
@@ -125,8 +138,9 @@ def default_message(message):  # обработчик сообщений вме�
 
 print("Бот запущен")
 websource.start()
+if localhost:
+    import hosting
+    from pyngrok import ngrok
+    hosting.start()
 helper.main()
-try:
-    bot.polling(none_stop=True, interval=0, skip_pending=True)  # запуск бота
-except Exception as e:
-    print(e)
+bot.polling(none_stop=True, interval=0, skip_pending=True)  # запуск бота
